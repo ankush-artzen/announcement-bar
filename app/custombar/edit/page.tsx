@@ -65,15 +65,23 @@ const EditPage: React.FC = () => {
   // ✅ Fetch settings for the given ID
   useEffect(() => {
     if (!id) return;
-
+  
     const fetchData = async () => {
       try {
         const res = await fetch(`/api/announcements/${id}`);
         const data = await res.json();
+  
         if (data?.success && data?.data?.settings) {
-          setSettings(data.data.settings);
+          const fetched = data.data.settings;
+  
+          setSettings({
+            ...defaultSettings,
+            ...fetched,
+            messages: Array.isArray(fetched.messages)
+              ? fetched.messages
+              : defaultSettings.messages,
+          });
         } else {
-          console.warn("⚠️ Falling back to default settings");
           setSettings(defaultSettings);
         }
       } catch (err) {
@@ -81,10 +89,10 @@ const EditPage: React.FC = () => {
         setSettings(defaultSettings);
       }
     };
-
-    fetchData();
+  
+    fetchData(); // ✅ Correct placement
   }, [id]);
-
+  
   // Timer Logic
   useEffect(() => {
     if (!settings?.showTimer || !settings?.endDate) return;
@@ -148,14 +156,58 @@ const EditPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [settings?.announcementType, settings?.messages]);
 
-  const resetViews = () => {
-    localStorage.removeItem("countdown_views");
-    location.reload();
-  };
+  // const resetViews = () => {
+  //   localStorage.removeItem("countdown_views");
+  //   location.reload();
+  // };
 
   const handleSave = async () => {
-    if (!id) return;
+    if (!id || !settings) return;
     setSaving(true);
+  
+    // 🔽 Build filtered settings
+    const filteredSettings: Partial<Settings> = {
+      announcementType: settings.announcementType,
+      title: settings.title,
+    };
+  
+    if (
+      settings.announcementType === "Marquee" ||
+      settings.announcementType === "Carousel"
+    ) {
+      filteredSettings.messages = settings.messages;
+    }
+  
+    if (settings.announcementType === "Marquee") {
+      filteredSettings.marqueeSpeed = settings.marqueeSpeed;
+    }
+  
+    if (settings.announcementType === "Simple") {
+      filteredSettings.endDate = settings.endDate;
+      filteredSettings.showTimer = settings.showTimer;
+      filteredSettings.showButton = settings.showButton;
+  
+      if (settings.showButton) {
+        filteredSettings.buttonLabel = settings.buttonLabel;
+        filteredSettings.buttonPosition = settings.buttonPosition;
+        filteredSettings.enableButtonLink = settings.enableButtonLink;
+        filteredSettings.buttonUrl = settings.buttonUrl;
+      }
+    }
+  
+    // Always include color settings
+    filteredSettings.bgColor = settings.bgColor;
+    filteredSettings.textColor = settings.textColor;
+  
+    // Optional: view count logic
+    if (settings.enableViewLimit) {
+      filteredSettings.enableViewLimit = true;
+      filteredSettings.maxViews = settings.maxViews;
+    }
+  
+    if (settings.enableViewCount) {
+      filteredSettings.enableViewCount = true;
+    }
   
     try {
       const res = await fetch(`/api/announcements/${id}`, {
@@ -163,7 +215,7 @@ const EditPage: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "Paused",
-          settings,
+          settings: filteredSettings,
         }),
       });
   
@@ -195,6 +247,7 @@ const EditPage: React.FC = () => {
       setSaving(false);
     }
   };
+
   
   if (!settings) {
     return (
@@ -216,19 +269,20 @@ const EditPage: React.FC = () => {
   }
 
   const {
-    announcementType,
-    title,
-    messages,
-    showTimer,
-    bgColor,
-    textColor,
-    showButton,
-    enableButtonLink,
-    buttonUrl,
-    buttonLabel,
-    buttonPosition,
-    marqueeSpeed,
-  } = settings;
+    announcementType = "Simple",
+    title = "",
+    messages = [],
+    showTimer = false,
+    bgColor = "#ffffff",
+    textColor = "#000000",
+    showButton = false,
+    enableButtonLink = false,
+    buttonUrl = "",
+    buttonLabel = "",
+    buttonPosition = "bottom",
+    marqueeSpeed = 20,
+  } = settings || {};
+  
 
   return (
     <Frame>
@@ -303,20 +357,22 @@ const EditPage: React.FC = () => {
             </>
           )}
 
-          {announcementType === "Marquee" && (
-            <div className="marquee-wrapper">
-              <div
-                className="marquee-track"
-                style={{ animationDuration: `${marqueeSpeed}s` }}
-              >
-                {Array.from({ length: 50 }).map((_, i) => (
-                  <div key={i} className="marquee-content">
-                    {messages[i % messages.length]}
-                  </div>
-                ))}
+          {announcementType === "Marquee" &&
+            Array.isArray(messages) &&
+            messages.length > 0 && (
+              <div className="marquee-wrapper">
+                <div
+                  className="marquee-track"
+                  style={{ animationDuration: `${marqueeSpeed || 20}s` }}
+                >
+                  {Array.from({ length: 50 }).map((_, i) => (
+                    <div key={i} className="marquee-content">
+                      {messages[i % messages.length]}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {announcementType === "Carousel" && (
             <div className="carousel-wrapper">
@@ -338,7 +394,7 @@ const EditPage: React.FC = () => {
             setSettings={
               setSettings as React.Dispatch<React.SetStateAction<Settings>>
             }
-            resetViews={resetViews}
+            // resetViews={resetViews}
             onSave={() =>
               setToast({
                 active: true,

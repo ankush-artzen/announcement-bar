@@ -103,17 +103,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const saveAnnouncement = async () => {
     if (isSaving) return;
     setIsSaving(true);
-
+  
     if (!shop) {
       console.error("❌ Shop is missing");
       setIsSaving(false);
       return;
     }
-
+  
     try {
       const tokenRes = await fetch(`/api/token?shop=${shop}`);
       const tokenData = await tokenRes.json();
-
+  
       if (!tokenData?.hasAccessToken) {
         console.error("❌ No access token found for this shop");
         setIsSaving(false);
@@ -124,14 +124,55 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       setIsSaving(false);
       return;
     }
-
+  
+    // 🔽 Filter relevant settings based on announcement type and toggles
+    const filteredSettings: Partial<Settings> = {
+      announcementType: settings.announcementType,
+      title: settings.title,
+    };
+  
+    if (settings.announcementType === "Marquee" || settings.announcementType === "Carousel") {
+      filteredSettings.messages = settings.messages;
+    }
+  
+    if (settings.announcementType === "Marquee") {
+      filteredSettings.marqueeSpeed = settings.marqueeSpeed;
+    }
+  
+    if (settings.announcementType === "Simple") {
+      filteredSettings.endDate = settings.endDate;
+      filteredSettings.showTimer = settings.showTimer;
+      filteredSettings.showButton = settings.showButton;
+  
+      if (settings.showButton) {
+        filteredSettings.buttonLabel = settings.buttonLabel;
+        filteredSettings.buttonPosition = settings.buttonPosition;
+        filteredSettings.enableButtonLink = settings.enableButtonLink;
+        filteredSettings.buttonUrl = settings.buttonUrl;
+      }
+    }
+  
+    // Always include color settings
+    filteredSettings.bgColor = settings.bgColor;
+    filteredSettings.textColor = settings.textColor;
+  
+    // Optional view logic
+    if (settings.enableViewLimit) {
+      filteredSettings.enableViewLimit = true;
+      filteredSettings.maxViews = settings.maxViews;
+    }
+  
+    if (settings.enableViewCount) {
+      filteredSettings.enableViewCount = true;
+    }
+  
     const payload = {
       name: settings.title || "Untitled",
       status: "Paused",
-      settings,
+      settings: filteredSettings,
       shop,
     };
-
+  
     try {
       const response = await fetch(
         bannerId
@@ -141,11 +182,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           method: bannerId ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        },
+        }
       );
-
+  
       const data = await response.json();
-
+  
       if (data.success) {
         console.log("✅ Announcement saved:", data);
         if (onSave) onSave();
@@ -158,7 +199,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       setIsSaving(false);
     }
   };
-
+  
   // -----------------------
   // JSX
   // -----------------------

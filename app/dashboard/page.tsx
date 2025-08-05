@@ -12,6 +12,8 @@ import {
   Toast,
   Frame,
   Tooltip,
+  ProgressBar,
+  Box,
 } from "@shopify/polaris";
 import { useRouter } from "next/navigation";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -53,7 +55,6 @@ export default function CustomBanner() {
   const [trialEndsOn, setTrialEndsOn] = useState<string | null>(null);
   const [totalViews, setTotalViews] = useState<number>(0);
 
-
   const dismissToast = () => setToastActive(false);
   const showToast = (msg: string, isError = false) => {
     setToastContent(msg);
@@ -65,9 +66,12 @@ export default function CustomBanner() {
   const expiry = planExpiresOn ? new Date(planExpiresOn) : null;
   const trialEnd = trialEndsOn ? new Date(trialEndsOn) : null;
 
-  const isInTrial = trialEnd && today < trialEnd;
+  const isInTrial = !!trialEnd && today < trialEnd;
+
   const hasPremiumAccess =
-    plan === "Premium" || isInTrial || (expiry && today < expiry);
+    plan === "Premium" ||
+    (plan === "Pending" && isInTrial) ||
+    (plan === "Premium" && expiry && today < expiry);
 
   // ----------------------
   // Fetch shop from AppBridge or localStorage
@@ -137,7 +141,7 @@ export default function CustomBanner() {
         try {
           const res = await fetch(`/api/announcements/getviews?shop=${shop}`);
           const data = await res.json();
-      
+
           if (res.ok) {
             setTotalViews(data.totalViews || 0);
           } else {
@@ -178,8 +182,6 @@ export default function CustomBanner() {
 
     fetchAllData();
   }, [shop]);
- 
-  
 
   // ----------------------
   // JSX
@@ -250,7 +252,7 @@ export default function CustomBanner() {
                       Views
                     </Text>
                     <Text as="p" variant="bodyLg" fontWeight="semibold">
-                    {totalViews}
+                      {totalViews}
                     </Text>
                   </div>
                 </Card>
@@ -262,14 +264,20 @@ export default function CustomBanner() {
                     </Text>
                     <Badge
                       tone={
-                        plan === "Free"
-                          ? "attention"
-                          : isInTrial
-                            ? "warning"
-                            : "success"
+                        plan === "Pending"
+                          ? "critical"
+                          : plan === "Free"
+                            ? "attention"
+                            : isInTrial
+                              ? "warning"
+                              : "success"
                       }
                     >
-                      {isInTrial ? "Trial Active" : plan}
+                      {plan === "Pending"
+                        ? "Premium"
+                        : isInTrial
+                          ? "Trial Active"
+                          : plan}
                     </Badge>
                   </div>
                 </Card>
@@ -278,6 +286,78 @@ export default function CustomBanner() {
 
             {/* Plan Overview */}
             <Layout.Section>
+              {!hasPremiumAccess && plan === "Free" && (
+                <Card>
+                  <div style={{ padding: "16px" }}>
+                    <Text as="h6" variant="headingSm" tone="subdued">
+                      View Usage
+                    </Text>
+
+                    <Text as="p" variant="bodyMd" fontWeight="medium">
+                      {totalViews} / 1000 views used
+                    </Text>
+
+                    <div style={{ marginTop: "12px" }}>
+                      <ProgressBar
+                        progress={Math.min((totalViews / 1000) * 100, 100)}
+                        tone={totalViews >= 1000 ? "critical" : "primary"}
+                      />
+                    </div>
+
+                    {totalViews >= 1000 && (
+                      <Box paddingBlockStart="200">
+                        <Text
+                          as="p"
+                          variant="bodySm"
+                          tone="critical"
+                          fontWeight="medium"
+                        >
+                          You have reached the free plan limit!
+                        </Text>
+                      </Box>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {hasPremiumAccess && (
+                <Card>
+                  <div
+                    style={{
+                      padding: "20px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                    }}
+                  >
+                    <Text as="h6" variant="headingSm" tone="subdued">
+                      Total Views Tracked
+                    </Text>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text as="p" variant="bodyLg" fontWeight="semibold">
+                        {totalViews.toLocaleString()} views
+                      </Text>
+
+                      <Badge tone="success" size="medium">
+                        Premium
+                      </Badge>
+                    </div>
+
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      You are  currently enjoying unlimited views as a Premium
+                      user.
+                    </Text>
+                  </div>
+                </Card>
+              )}
+
               <Card>
                 <div style={{ padding: "16px" }}>
                   <div

@@ -1,6 +1,6 @@
 "use client";
 
-import { Text, Button, Spinner } from "@shopify/polaris";
+import { Text, Button } from "@shopify/polaris";
 import { useMemo, useEffect } from "react";
 
 export default function PlanCard({
@@ -14,6 +14,7 @@ export default function PlanCard({
   subscriptionId,
   planExpiresOn,
   trialEndsOn,
+  billingStatus,
   disabled,
 }: {
   type: "Free" | "Premium";
@@ -26,6 +27,7 @@ export default function PlanCard({
   subscriptionId?: string | null;
   planExpiresOn?: Date | string | null;
   trialEndsOn?: Date | string | null;
+  billingStatus?: string;
   disabled?: boolean;
 }) {
   const isPremium = type === "Premium";
@@ -34,73 +36,67 @@ export default function PlanCard({
   const expiryDate = planExpiresOn ? new Date(planExpiresOn) : null;
   const trialEndDate = trialEndsOn ? new Date(trialEndsOn) : null;
 
-  const isTrialValid =
-    trialEndDate instanceof Date && !isNaN(trialEndDate.getTime());
-  const isPlanValid =
-    expiryDate instanceof Date && !isNaN(expiryDate.getTime());
+  const isTrialValid = trialEndDate instanceof Date && !isNaN(trialEndDate.getTime());
+  const isPlanValid = expiryDate instanceof Date && !isNaN(expiryDate.getTime());
 
   const isInTrial = isTrialValid && today < trialEndDate;
-  const hasPremiumAccess = isInTrial || (isPlanValid && today < expiryDate);
-  const normalizedPlan = activePlan?.toLowerCase().replace(" plan", "").trim();
 
-  const isSubscribed = ["premium", "pending", "scheduled cancel"].includes(
-    normalizedPlan,
-  );
-  const isCancelled = normalizedPlan === "scheduled cancel";
+  // 🔒 STRICT: block premium if trial ended or billing is cancelled
+  const normalizedPlan = activePlan?.toLowerCase().replace(" plan", "").trim();
+  const isCancelled = billingStatus === "cancelled" || normalizedPlan === "scheduled cancel";
+  const hasPremiumAccess =
+    isInTrial ||
+    (normalizedPlan === "premium" &&
+      !isCancelled &&
+      isPlanValid &&
+      today < expiryDate);
+
+  const isSubscribed = ["premium", "pending", "scheduled cancel"].includes(normalizedPlan);
 
   useEffect(() => {
-    const expiryDate = planExpiresOn ? new Date(planExpiresOn) : null;
-    const trialEndDate = trialEndsOn ? new Date(trialEndsOn) : null;
-
-    console.log("🧠 PlanCard Rendered:");
-    console.log("👉 type:", type);
+    console.log("🧠 PlanCard Debug:");
     console.log("👉 activePlan:", activePlan);
-    console.log("👉 isSubscribed:", isSubscribed);
-    console.log("👉 isCancelled:", isCancelled);
+    console.log("👉 billingStatus:", billingStatus);
     console.log("👉 subscriptionId:", subscriptionId);
-    console.log("👉 planExpiresOn:", expiryDate?.toISOString());
     console.log("👉 trialEndsOn:", trialEndDate?.toISOString());
+    console.log("👉 planExpiresOn:", expiryDate?.toISOString());
     console.log("👉 isInTrial:", isInTrial);
     console.log("👉 hasPremiumAccess:", hasPremiumAccess);
-    console.log("👉 isLoading:", isLoading);
-  }, [
-    type,
-    activePlan,
-    subscriptionId,
-    planExpiresOn,
-    trialEndsOn,
-    isInTrial,
-    isSubscribed,
-    isCancelled,
-    isLoading,
-    hasPremiumAccess,
-  ]);
+  }, [activePlan, billingStatus, trialEndsOn, planExpiresOn, isInTrial, hasPremiumAccess]);
 
   const shouldHighlight = useMemo(() => {
-    const result =
-      (isPremium && hasPremiumAccess) || (!isPremium && !hasPremiumAccess);
-    console.log("🎨 shouldHighlight:", result);
-    return result;
+    return (isPremium && hasPremiumAccess) || (!isPremium && !hasPremiumAccess);
   }, [isPremium, hasPremiumAccess]);
 
   const renderButton = () => {
-    const trialExpired = isTrialValid && today >= trialEndDate;
-    const planExpired = isPlanValid && today >= expiryDate;
-
     if (isPremium) {
       if (isSubscribed && subscriptionId) {
         if (isCancelled && isInTrial) {
           return (
-            <Button fullWidth size="medium" variant="primary" disabled>
+            <div
+              style={{
+                width: "100%",
+                padding: "4px 16px",
+                textAlign: "center",
+                backgroundColor: "#171516",
+                borderRadius: "8px",
+                fontWeight: 600,
+                fontSize: "13px",
+                fontFamily: "Inter, sans-serif",
+                color: "#f7fAf5",
+                cursor: "not-allowed",
+                border: "1px solid #10b981",
+              }}
+            >
               Trial active until {trialEndDate?.toLocaleDateString()}
-            </Button>
+            </div>
           );
         }
 
         if (isCancelled && !isInTrial) {
           return (
             <Button fullWidth size="medium" variant="primary" disabled>
-              {`Plan active until ${expiryDate?.toLocaleDateString() ?? "Unknown date"}`}
+              Plan expired
             </Button>
           );
         }
@@ -135,6 +131,7 @@ export default function PlanCard({
           </Button>
         );
       }
+
       if (hasPremiumAccess) {
         return (
           <Button fullWidth size="medium" variant="primary" disabled>
@@ -159,19 +156,29 @@ export default function PlanCard({
       );
     }
 
-    // Free Plan fallback
-    let label = "You're on Free Plan";
-
-    if (hasPremiumAccess) {
-      label = "Using All Features";
-    } else if (isCancelled && isPlanValid && expiryDate && today < expiryDate) {
-      label = `Premium active until ${expiryDate.toLocaleDateString()}`;
-    }
+    // Free plan fallback
+    const label = hasPremiumAccess
+      ? "Using All Features"
+      : "You're on Free Plan";
 
     return (
-      <Button fullWidth size="medium" variant="primary" disabled>
+      <div
+        style={{
+          width: "100%",
+          padding: "4px 16px",
+          textAlign: "center",
+          backgroundColor: "#171516",
+          borderRadius: "8px",
+          fontWeight: 600,
+          fontSize: "13px",
+          color: "#F7FAF5",
+          fontFamily: "Inter, sans-serif",
+          letterSpacing: "0.2px",
+          cursor: "not-allowed",
+        }}
+      >
         {label}
-      </Button>
+      </div>
     );
   };
 
@@ -213,7 +220,7 @@ export default function PlanCard({
           </Text>
 
           <div style={{ marginTop: "16px", marginBottom: "12px" }}>
-            <div style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{ display: "flex", justifyContent: "center", backgroundColor: "black" }}>
               {renderButton()}
             </div>
           </div>
